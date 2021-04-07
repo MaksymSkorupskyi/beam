@@ -163,6 +163,40 @@ class ReadFromMongoDB(PTransform):
 
 
 class _BoundedMongoSource(iobase.BoundedSource):
+    """A MongoDB source that reads a finite amount of input records.
+
+    This class defines following operations which can be used to read the source
+    efficiently.
+
+    * Size estimation - method ``estimate_size()`` may return an accurate
+      estimation in bytes for the size of the source.
+    * Splitting into bundles of a given size - method ``split()`` can be used to
+      split the source into a set of sub-sources (bundles) based on a desired
+      bundle size.
+    * Getting a MongoDBRangeTracker - method ``get_range_tracker()`` should return a
+      ``MongoDBRangeTracker`` object for a given position range for the position type
+      of the records returned by the source.
+    * Reading the data - method ``read()`` can be used to read data from the
+      source while respecting the boundaries defined by a given
+      ``MongoDBRangeTracker``.
+
+    A runner will perform reading the source in two steps.
+
+    (1) Method ``get_range_tracker()`` will be invoked with start and end
+        positions to obtain a ``MongoDBRangeTracker`` for the range of positions the
+        runner intends to read. Source must define a default initial start and end
+        position range. These positions must be used if the start and/or end
+        positions passed to the method ``get_range_tracker()`` are ``None``
+    (2) Method read() will be invoked with the ``MongoDBRangeTracker`` obtained in the
+        previous step.
+
+    **Mutability**
+
+    A ``_BoundedMongoSource`` object should not be mutated while
+    its methods (for example, ``read()``) are being invoked by a runner. Runner
+    implementations may invoke methods of ``_BoundedMongoSource`` objects through
+    multi-threaded and/or reentrant execution modes.
+    """
     def __init__(
         self,
         uri=None,
@@ -248,7 +282,24 @@ class _BoundedMongoSource(iobase.BoundedSource):
                 stop_position=stop_position,
             )
 
-    def get_range_tracker(self, start_position, stop_position):
+    def get_range_tracker(
+        self,
+        start_position: Union[int, str, ObjectId] = None,
+        stop_position: Union[int, str, ObjectId] = None,
+    ):
+        """Returns a MongoDBRangeTracker for a given position range.
+
+        Framework may invoke ``read()`` method with the MongoDBRangeTracker object
+        returned here to read data from the source.
+
+        Args:
+          start_position: starting position of the range. If 'None' default start
+                          position of the source must be used.
+          stop_position:  ending position of the range. If 'None' default stop
+                          position of the source must be used.
+        Returns:
+          a ``MongoDBRangeTracker`` for the given position range.
+        """
         start_position, stop_position = self._replace_none_positions(
             start_position, stop_position
         )
