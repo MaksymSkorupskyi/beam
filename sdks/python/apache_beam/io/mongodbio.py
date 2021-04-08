@@ -86,7 +86,7 @@ from apache_beam.utils.annotations import experimental
 _LOGGER = logging.getLogger(__name__)
 
 try:
-    # Mongodb has its own bundled bson, which is not compatible with bson pakcage.
+    # Mongodb has its own bundled bson, which is not compatible with bson package.
     # (https://github.com/py-bson/bson/issues/82). Try to import objectid and if
     # it fails because bson package is installed, MongoDB IO will not work but at
     # least rest of the SDK will work.
