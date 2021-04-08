@@ -197,6 +197,7 @@ class _BoundedMongoSource(iobase.BoundedSource):
     implementations may invoke methods of ``_BoundedMongoSource`` objects through
     multi-threaded and/or reentrant execution modes.
     """
+
     def __init__(
         self,
         uri=None,
@@ -517,6 +518,19 @@ class MongoDBRangeTracker(OrderedPositionRangeTracker):
         if not 0 <= fraction <= 1:
             raise ValueError(f"Invalid fraction: {fraction}! Must be in range [0, 1]")
 
+        # Handle integer `_id`
+        if isinstance(start, int) and isinstance(end, int):
+            total = end - start
+            pos = int(total * fraction + start)
+            # make sure split position is larger than start position and smaller than
+            # end position.
+            if pos <= start:
+                pos = start + 1
+            if pos >= end:
+                pos = end - 1
+            return pos
+
+        # Handle ObjectId `_id`
         if isinstance(start, (int, ObjectId)) and isinstance(end, (int, ObjectId)):
             start = _ObjectIdHelper.id_to_int(start)
             end = _ObjectIdHelper.id_to_int(end)
@@ -525,9 +539,9 @@ class MongoDBRangeTracker(OrderedPositionRangeTracker):
             # make sure split position is larger than start position and smaller than
             # end position.
             if pos <= start:
-                return _ObjectIdHelper.increment_id(start, 1)
+                pos = start + 1
             if pos >= end:
-                return _ObjectIdHelper.increment_id(end, -1)
+                pos = end - 1
             return _ObjectIdHelper.int_to_id(pos)
 
         if start is None:
@@ -630,7 +644,7 @@ class _ObjectIdHelper:
         ]
 
         number_bytes = struct.pack(">III", *ints)
-        return objectid.ObjectId(number_bytes)
+        return ObjectId(number_bytes)
 
     @classmethod
     def increment_id(
@@ -646,17 +660,17 @@ class _ObjectIdHelper:
         Returns:
             `_id` incremented by `inc` value
         """
-        # Handle integer id:
+        # Handle integer `_id`
         if isinstance(object_id, int):
             return object_id + inc
 
-        # Handle string id:
+        # Handle string `_id`
         if isinstance(object_id, str):
             object_id = object_id or chr(31)  # handle empty string ('')
             # incrementing the latest symbol of the string
             return object_id[:-1] + chr(ord(object_id[-1:]) + inc)
 
-        # Handle ObjectId id:
+        # Handle ObjectId `_id`:
         # increment object_id binary value by inc value and return new object id.
         id_number = _ObjectIdHelper.id_to_int(object_id)
         new_number = id_number + inc
