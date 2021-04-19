@@ -22,29 +22,29 @@ import random
 import unittest
 from unittest import TestCase
 
+import apache_beam as beam
 import mock
+from apache_beam.io import ReadFromMongoDB
+from apache_beam.io import WriteToMongoDB
+from apache_beam.io import source_test_utils
+from apache_beam.io.mongodbio import MongoDBRangeTracker
+from apache_beam.io.mongodbio import _BoundedMongoSource
+from apache_beam.io.mongodbio import _GenerateObjectIdFn
+from apache_beam.io.mongodbio import _MongoSink
+from apache_beam.io.mongodbio import _ObjectIdHelper
+from apache_beam.io.mongodbio import _WriteMongoFn
+from apache_beam.testing.test_pipeline import TestPipeline
+from apache_beam.testing.util import assert_that
+from apache_beam.testing.util import equal_to
 from bson import objectid
 from parameterized import parameterized_class
 from pymongo import ASCENDING
 from pymongo import ReplaceOne
 
-import apache_beam as beam
-from apache_beam.io import ReadFromMongoDB
-from apache_beam.io import WriteToMongoDB
-from apache_beam.io import source_test_utils
-from apache_beam.io.mongodbio import _BoundedMongoSource
-from apache_beam.io.mongodbio import _GenerateObjectIdFn
-from apache_beam.io.mongodbio import _MongoSink
-from apache_beam.io.mongodbio import _ObjectIdHelper
-from apache_beam.io.mongodbio import _ObjectIdRangeTracker
-from apache_beam.io.mongodbio import _WriteMongoFn
-from apache_beam.testing.test_pipeline import TestPipeline
-from apache_beam.testing.util import assert_that
-from apache_beam.testing.util import equal_to
-
 
 class _MockMongoColl(object):
   """Fake mongodb collection cursor."""
+
   def __init__(self, docs):
     self.docs = docs
 
@@ -111,7 +111,7 @@ class _MockMongoColl(object):
   def sort(self, sort_items):
     key, order = sort_items[0]
     self.docs = sorted(
-        self.docs, key=lambda x: x[key], reverse=(order != ASCENDING))
+      self.docs, key=lambda x: x[key], reverse=(order != ASCENDING))
     return self
 
   def limit(self, num):
@@ -153,11 +153,11 @@ class _MockMongoColl(object):
         # non-last bucket's 'max' is exclusive and == next bucket's 'min'
         count = stop - start
       buckets.append({
-          '_id': {
-              'min': docs[start]['_id'],
-              'max': docs[stop]['_id'],
-          },
-          'count': count
+        '_id': {
+          'min': docs[start]['_id'],
+          'max': docs[stop]['_id'],
+        },
+        'count': count
       })
       start = stop
 
@@ -551,42 +551,63 @@ class ObjectIdHelperTest(TestCase):
 
   def test_increment_id(self):
     test_cases = [
-        (
-            objectid.ObjectId('000000000000000100000000'),
-            objectid.ObjectId('0000000000000000ffffffff')),
-        (
-            objectid.ObjectId('000000010000000000000000'),
-            objectid.ObjectId('00000000ffffffffffffffff')),
+      (0, -1),
+      (1, 0),
+      (100, 99),
+      (1000000000, 999999999),
+      (chr(31), chr(30)),
+      (" ", chr(31)),
+      ("!", " "),
+      ("\x1a", "\x19"),
+      ("AAB", "AAA"),
+      ("000000000000000000001", "000000000000000000000"),
+      (
+        objectid.ObjectId("000000000000000100000000"),
+        objectid.ObjectId("0000000000000000ffffffff"),
+      ),
+      (
+        objectid.ObjectId("000000010000000000000000"),
+        objectid.ObjectId("00000000ffffffffffffffff"),
+      ),
     ]
-    for (first, second) in test_cases:
+    for first, second in test_cases:
       self.assertEqual(second, _ObjectIdHelper.increment_id(first, -1))
       self.assertEqual(first, _ObjectIdHelper.increment_id(second, 1))
 
     for _ in range(100):
-      id = objectid.ObjectId()
-      self.assertLess(id, _ObjectIdHelper.increment_id(id, 1))
-      self.assertGreater(id, _ObjectIdHelper.increment_id(id, -1))
+      _id = objectid.ObjectId()
+      self.assertLess(_id, _ObjectIdHelper.increment_id(_id, 1))
+      self.assertGreater(_id, _ObjectIdHelper.increment_id(_id, -1))
+
+  @staticmethod
+  def test_increment_id_empty_string():
+    assert _ObjectIdHelper.increment_id("", 1) == " "
+    assert _ObjectIdHelper.increment_id("", 2) == "!"
+    assert _ObjectIdHelper.increment_id("", 10) == ")"
+    assert _ObjectIdHelper.increment_id("", -1) == "\x1e"
+    assert _ObjectIdHelper.increment_id("", -2) == "\x1d"
+    assert _ObjectIdHelper.increment_id("", -10) == "\x15"
 
 
 class ObjectRangeTrackerTest(TestCase):
   def test_fraction_position_conversion(self):
     start_int = 0
-    stop_int = 2**96 - 1
+    stop_int = 2 ** 96 - 1
     start = _ObjectIdHelper.int_to_id(start_int)
     stop = _ObjectIdHelper.int_to_id(stop_int)
-    test_cases = ([start_int, stop_int, 2**32, 2**32 - 1, 2**64, 2**64 - 1] +
+    test_cases = ([start_int, stop_int, 2 ** 32, 2 ** 32 - 1, 2 ** 64, 2 ** 64 - 1] +
                   [random.randint(start_int, stop_int) for _ in range(100)])
-    tracker = _ObjectIdRangeTracker()
+    tracker = MongoDBRangeTracker()
     for pos in test_cases:
       id = _ObjectIdHelper.int_to_id(pos - start_int)
       desired_fraction = (pos - start_int) / (stop_int - start_int)
       self.assertAlmostEqual(
-          tracker.position_to_fraction(id, start, stop),
-          desired_fraction,
-          places=20)
+        tracker.position_to_fraction(id, start, stop),
+        desired_fraction,
+        places=20)
 
       convert_id = tracker.fraction_to_position(
-          (pos - start_int) / (stop_int - start_int), start, stop)
+        (pos - start_int) / (stop_int - start_int), start, stop)
       # due to precision loss, the convert fraction is only gonna be close to
       # original fraction.
       convert_fraction = tracker.position_to_fraction(convert_id, start, stop)
