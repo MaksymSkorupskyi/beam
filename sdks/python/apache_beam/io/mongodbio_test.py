@@ -120,7 +120,7 @@ class _MockMongoColl(object):
   def count_documents(self, filter):
     return len(self._filter(filter))
 
-  def aggregate(self, pipeline):
+  def aggregate(self, pipeline, **kwargs):
     # Simulate $bucketAuto aggregate pipeline.
     # Example splits doc count for the total of 5 docs:
     #   - 1 bucket:  [5]
