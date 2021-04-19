@@ -205,7 +205,7 @@ class _MockMongoDb(object):
     }
 
 
-class _MockMongoClient(object):
+class _MockMongoClient:
   def __init__(self, docs):
     self.docs = docs
 
@@ -380,7 +380,7 @@ class MongoSourceTest(unittest.TestCase):
   def test_get_range_tracker(self, mock_client):
     mock_client.return_value = _MockMongoClient(self._docs)
     self.assertIsInstance(
-        self.mongo_source.get_range_tracker(None, None), _ObjectIdRangeTracker)
+        self.mongo_source.get_range_tracker(None, None), MongoDBRangeTracker)
 
   @mock.patch('apache_beam.io.mongodbio.MongoClient')
   def test_read(self, mock_client):
