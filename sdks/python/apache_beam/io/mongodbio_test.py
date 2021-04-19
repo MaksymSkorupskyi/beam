@@ -44,7 +44,6 @@ from pymongo import ReplaceOne
 
 class _MockMongoColl(object):
   """Fake mongodb collection cursor."""
-
   def __init__(self, docs):
     self.docs = docs
 
@@ -111,7 +110,7 @@ class _MockMongoColl(object):
   def sort(self, sort_items):
     key, order = sort_items[0]
     self.docs = sorted(
-      self.docs, key=lambda x: x[key], reverse=(order != ASCENDING))
+        self.docs, key=lambda x: x[key], reverse=(order != ASCENDING))
     return self
 
   def limit(self, num):
@@ -153,11 +152,11 @@ class _MockMongoColl(object):
         # non-last bucket's 'max' is exclusive and == next bucket's 'min'
         count = stop - start
       buckets.append({
-        '_id': {
-          'min': docs[start]['_id'],
-          'max': docs[stop]['_id'],
-        },
-        'count': count
+          '_id': {
+              'min': docs[start]['_id'],
+              'max': docs[stop]['_id'],
+          },
+          'count': count
       })
       start = stop
 
@@ -500,9 +499,13 @@ class MongoSinkTest(unittest.TestCase):
 class WriteToMongoDBTest(unittest.TestCase):
   @mock.patch('apache_beam.io.mongodbio.MongoClient')
   def test_write_to_mongodb_with_existing_id(self, mock_client):
-    id = objectid.ObjectId()
-    docs = [{'x': 1, '_id': id}]
-    expected_update = [ReplaceOne({'_id': id}, {'x': 1, '_id': id}, True, None)]
+    _id = objectid.ObjectId()
+    docs = [{'x': 1, '_id': _id}]
+    expected_update = [
+        ReplaceOne({'_id': _id}, {
+            'x': 1, '_id': _id
+        }, True, None)
+    ]
     with TestPipeline() as p:
       _ = (
           p | "Create" >> beam.Create(docs)
@@ -538,37 +541,37 @@ class ObjectIdHelperTest(TestCase):
         (objectid.ObjectId('00000000ffffffffffffffff'), 2**64 - 1),
         (objectid.ObjectId('ffffffffffffffffffffffff'), 2**96 - 1),
     ]
-    for (id, number) in test_cases:
-      self.assertEqual(id, _ObjectIdHelper.int_to_id(number))
-      self.assertEqual(number, _ObjectIdHelper.id_to_int(id))
+    for (_id, number) in test_cases:
+      self.assertEqual(_id, _ObjectIdHelper.int_to_id(number))
+      self.assertEqual(number, _ObjectIdHelper.id_to_int(_id))
 
     # random tests
     for _ in range(100):
-      id = objectid.ObjectId()
-      number = int(id.binary.hex(), 16)
-      self.assertEqual(id, _ObjectIdHelper.int_to_id(number))
-      self.assertEqual(number, _ObjectIdHelper.id_to_int(id))
+      _id = objectid.ObjectId()
+      number = int(_id.binary.hex(), 16)
+      self.assertEqual(_id, _ObjectIdHelper.int_to_id(number))
+      self.assertEqual(number, _ObjectIdHelper.id_to_int(_id))
 
   def test_increment_id(self):
     test_cases = [
-      (0, -1),
-      (1, 0),
-      (100, 99),
-      (1000000000, 999999999),
-      (chr(31), chr(30)),
-      (" ", chr(31)),
-      ("!", " "),
-      ("\x1a", "\x19"),
-      ("AAB", "AAA"),
-      ("000000000000000000001", "000000000000000000000"),
-      (
-        objectid.ObjectId("000000000000000100000000"),
-        objectid.ObjectId("0000000000000000ffffffff"),
-      ),
-      (
-        objectid.ObjectId("000000010000000000000000"),
-        objectid.ObjectId("00000000ffffffffffffffff"),
-      ),
+        (0, -1),
+        (1, 0),
+        (100, 99),
+        (1000000000, 999999999),
+        (chr(31), chr(30)),
+        (" ", chr(31)),
+        ("!", " "),
+        ("\x1a", "\x19"),
+        ("AAB", "AAA"),
+        ("000000000000000000001", "000000000000000000000"),
+        (
+            objectid.ObjectId("000000000000000100000000"),
+            objectid.ObjectId("0000000000000000ffffffff"),
+        ),
+        (
+            objectid.ObjectId("000000010000000000000000"),
+            objectid.ObjectId("00000000ffffffffffffffff"),
+        ),
     ]
     for first, second in test_cases:
       self.assertEqual(second, _ObjectIdHelper.increment_id(first, -1))
@@ -592,22 +595,22 @@ class ObjectIdHelperTest(TestCase):
 class ObjectRangeTrackerTest(TestCase):
   def test_fraction_position_conversion(self):
     start_int = 0
-    stop_int = 2 ** 96 - 1
+    stop_int = 2**96 - 1
     start = _ObjectIdHelper.int_to_id(start_int)
     stop = _ObjectIdHelper.int_to_id(stop_int)
-    test_cases = ([start_int, stop_int, 2 ** 32, 2 ** 32 - 1, 2 ** 64, 2 ** 64 - 1] +
+    test_cases = ([start_int, stop_int, 2**32, 2**32 - 1, 2**64, 2**64 - 1] +
                   [random.randint(start_int, stop_int) for _ in range(100)])
     tracker = MongoDBRangeTracker()
     for pos in test_cases:
-      id = _ObjectIdHelper.int_to_id(pos - start_int)
+      _id = _ObjectIdHelper.int_to_id(pos - start_int)
       desired_fraction = (pos - start_int) / (stop_int - start_int)
       self.assertAlmostEqual(
-        tracker.position_to_fraction(id, start, stop),
-        desired_fraction,
-        places=20)
+          tracker.position_to_fraction(_id, start, stop),
+          desired_fraction,
+          places=20)
 
       convert_id = tracker.fraction_to_position(
-        (pos - start_int) / (stop_int - start_int), start, stop)
+          (pos - start_int) / (stop_int - start_int), start, stop)
       # due to precision loss, the convert fraction is only gonna be close to
       # original fraction.
       convert_fraction = tracker.position_to_fraction(convert_id, start, stop)

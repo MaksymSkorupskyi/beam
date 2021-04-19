@@ -106,7 +106,6 @@ __all__ = ["ReadFromMongoDB", "WriteToMongoDB"]
 @experimental()
 class ReadFromMongoDB(PTransform):
   """A ``PTransform`` to read MongoDB documents into a ``PCollection``."""
-
   def __init__(
       self,
       uri="mongodb://localhost:27017",
@@ -146,15 +145,16 @@ class ReadFromMongoDB(PTransform):
     if not isinstance(db, str):
       raise ValueError("ReadFromMongDB db param must be specified as a string")
     if not isinstance(coll, str):
-      raise ValueError("ReadFromMongDB coll param must be specified as a string")
+      raise ValueError(
+          "ReadFromMongDB coll param must be specified as a string")
     self._mongo_source = _BoundedMongoSource(
-      uri=uri,
-      db=db,
-      coll=coll,
-      filter=filter,
-      projection=projection,
-      extra_client_params=extra_client_params,
-      bucket_auto=bucket_auto,
+        uri=uri,
+        db=db,
+        coll=coll,
+        filter=filter,
+        projection=projection,
+        extra_client_params=extra_client_params,
+        bucket_auto=bucket_auto,
     )
 
   def expand(self, pcoll):
@@ -172,9 +172,9 @@ class _BoundedMongoSource(iobase.BoundedSource):
   * Splitting into bundles of a given size - method ``split()`` can be used to
     split the source into a set of sub-sources (bundles) based on a desired
     bundle size.
-  * Getting a MongoDBRangeTracker - method ``get_range_tracker()`` should return a
-    ``MongoDBRangeTracker`` object for a given position range for the position type
-    of the records returned by the source.
+  * Getting a MongoDBRangeTracker - method ``get_range_tracker()``
+    should return a ``MongoDBRangeTracker`` object for a given position range
+    for the position type of the records returned by the source.
   * Reading the data - method ``read()`` can be used to read data from the
     source while respecting the boundaries defined by a given
     ``MongoDBRangeTracker``.
@@ -182,12 +182,13 @@ class _BoundedMongoSource(iobase.BoundedSource):
   A runner will perform reading the source in two steps.
 
   (1) Method ``get_range_tracker()`` will be invoked with start and end
-      positions to obtain a ``MongoDBRangeTracker`` for the range of positions the
-      runner intends to read. Source must define a default initial start and end
-      position range. These positions must be used if the start and/or end
-      positions passed to the method ``get_range_tracker()`` are ``None``
-  (2) Method read() will be invoked with the ``MongoDBRangeTracker`` obtained in the
-      previous step.
+      positions to obtain a ``MongoDBRangeTracker`` for the range of positions
+      the runner intends to read.
+      Source must define a default initial start and end position range.
+      These positions must be used if the start and/or end positions
+      passed to the method ``get_range_tracker()`` are ``None``.
+  (2) Method read() will be invoked with the ``MongoDBRangeTracker``
+      obtained in the previous step.
 
   **Mutability**
 
@@ -196,7 +197,6 @@ class _BoundedMongoSource(iobase.BoundedSource):
   implementations may invoke methods of ``_BoundedMongoSource`` objects through
   multi-threaded and/or reentrant execution modes.
   """
-
   def __init__(
       self,
       uri=None,
@@ -255,9 +255,8 @@ class _BoundedMongoSource(iobase.BoundedSource):
     else:
       # Use splitVector for bundling
       split_keys = self._get_split_keys(
-        desired_bundle_size_in_mb, start_position, stop_position
-      )
-      weights = itertools.cycle((desired_bundle_size_in_mb,))
+          desired_bundle_size_in_mb, start_position, stop_position)
+      weights = itertools.cycle((desired_bundle_size_in_mb, ))
 
     bundle_start = start_position
     for split_key_id, weight in zip(split_keys, weights):
@@ -265,10 +264,10 @@ class _BoundedMongoSource(iobase.BoundedSource):
         break
       bundle_end = min(stop_position, split_key_id["_id"])
       yield iobase.SourceBundle(
-        weight=weight,
-        source=self,
-        start_position=bundle_start,
-        stop_position=bundle_end,
+          weight=weight,
+          source=self,
+          start_position=bundle_start,
+          stop_position=bundle_end,
       )
       bundle_start = bundle_end
     # add range of last split_key to stop_position
@@ -276,10 +275,10 @@ class _BoundedMongoSource(iobase.BoundedSource):
       # bucket_auto mode can come here if not split due to single document
       weight = 1 if self.bucket_auto else desired_bundle_size_in_mb
       yield iobase.SourceBundle(
-        weight=weight,
-        source=self,
-        start_position=bundle_start,
-        stop_position=stop_position,
+          weight=weight,
+          source=self,
+          start_position=bundle_start,
+          stop_position=stop_position,
       )
 
   def get_range_tracker(
@@ -308,13 +307,11 @@ class _BoundedMongoSource(iobase.BoundedSource):
   def read(self, range_tracker):
     with MongoClient(self.uri, **self.spec) as client:
       all_filters = self._merge_id_filter(
-        range_tracker.start_position(), range_tracker.stop_position()
-      )
+          range_tracker.start_position(), range_tracker.stop_position())
       docs_cursor = (
-        client[self.db][self.coll]
-          .find(filter=all_filters, projection=self.projection)
-          .sort([("_id", ASCENDING)])
-      )
+          client[self.db][self.coll].find(
+              filter=all_filters,
+              projection=self.projection).sort([("_id", ASCENDING)]))
       for doc in docs_cursor:
         if not range_tracker.try_claim(doc["_id"]):
           return
@@ -372,16 +369,19 @@ class _BoundedMongoSource(iobase.BoundedSource):
     bucket_count = math.ceil(size_in_mb / desired_chunk_size_in_mb)
     with beam.io.mongodbio.MongoClient(self.uri, **self.spec) as client:
       pipeline = [
-        {
-          # filter by positions and by the custom filter if any
-          "$match": self._merge_id_filter(start_pos, end_pos)
-        },
-        {"$bucketAuto": {"groupBy": "$_id", "buckets": bucket_count}},
+          {
+              # filter by positions and by the custom filter if any
+              "$match": self._merge_id_filter(start_pos, end_pos)
+          },
+          {
+              "$bucketAuto": {
+                  "groupBy": "$_id", "buckets": bucket_count
+              }
+          },
       ]
       buckets = list(
-        # Use `allowDiskUse` option to avoid aggregation limit of 100 Mb RAM
-        client[self.db][self.coll].aggregate(pipeline, allowDiskUse=True)
-      )
+          # Use `allowDiskUse` option to avoid aggregation limit of 100 Mb RAM
+          client[self.db][self.coll].aggregate(pipeline, allowDiskUse=True))
       if buckets:
         buckets[-1]["_id"]["max"] = end_pos
 
@@ -407,9 +407,9 @@ class _BoundedMongoSource(iobase.BoundedSource):
 
     if self.filter:
       all_filters = {
-        # see more at
-        # https://docs.mongodb.com/manual/reference/operator/query/and/
-        "$and": [self.filter.copy(), id_filter]
+          # see more at
+          # https://docs.mongodb.com/manual/reference/operator/query/and/
+          "$and": [self.filter.copy(), id_filter]
       }
     else:
       all_filters = id_filter
@@ -419,11 +419,9 @@ class _BoundedMongoSource(iobase.BoundedSource):
   def _get_head_document_id(self, sort_order):
     with MongoClient(self.uri, **self.spec) as client:
       cursor = (
-        client[self.db][self.coll]
-          .find(filter={}, projection=[])
-          .sort([("_id", sort_order)])
-          .limit(1)
-      )
+          client[self.db][self.coll].find(filter={}, projection=[]).sort([
+              ("_id", sort_order)
+          ]).limit(1))
       try:
         return cursor[0]["_id"]
 
@@ -448,8 +446,7 @@ class _BoundedMongoSource(iobase.BoundedSource):
     """
     with MongoClient(self.uri, **self.spec) as client:
       return client[self.db][self.coll].count_documents(
-        filter=self._merge_id_filter(start_position, stop_position)
-      )
+          filter=self._merge_id_filter(start_position, stop_position))
 
 
 class MongoDBRangeTracker(OrderedPositionRangeTracker):
@@ -462,7 +459,6 @@ class MongoDBRangeTracker(OrderedPositionRangeTracker):
   For bytes/string keys tracks progress through a lexicographically
   ordered keyspace of strings.
   """
-
   def position_to_fraction(
       self,
       pos: Union[int, bytes, str, ObjectId] = None,
@@ -477,11 +473,8 @@ class MongoDBRangeTracker(OrderedPositionRangeTracker):
       return (pos - start) / (end - start)
 
     # Handle ObjectId `_id`
-    if (
-        isinstance(pos, ObjectId)
-        and isinstance(start, ObjectId)
-        and isinstance(end, ObjectId)
-    ):
+    if (isinstance(pos, ObjectId) and isinstance(start, ObjectId) and
+        isinstance(end, ObjectId)):
       pos = _ObjectIdHelper.id_to_int(pos)
       start = _ObjectIdHelper.id_to_int(start)
       end = _ObjectIdHelper.id_to_int(end)
@@ -604,7 +597,6 @@ class MongoDBRangeTracker(OrderedPositionRangeTracker):
 
 class _ObjectIdHelper:
   """A Utility class to manipulate bson object ids."""
-
   @classmethod
   def id_to_int(cls, _id: Union[int, ObjectId]) -> int:
     """
@@ -637,9 +629,9 @@ class _ObjectIdHelper:
     if number < 0 or number >= (1 << 96):
       raise ValueError("number value must be within [0, %s)" % (1 << 96))
     ints = [
-      (number & 0xFFFFFFFF0000000000000000) >> 64,
-      (number & 0x00000000FFFFFFFF00000000) >> 32,
-      number & 0x0000000000000000FFFFFFFF,
+        (number & 0xFFFFFFFF0000000000000000) >> 64,
+        (number & 0x00000000FFFFFFFF00000000) >> 32,
+        number & 0x0000000000000000FFFFFFFF,
     ]
 
     number_bytes = struct.pack(">III", *ints)
@@ -675,9 +667,8 @@ class _ObjectIdHelper:
     new_number = id_number + inc
     if new_number < 0 or new_number >= (1 << 96):
       raise ValueError(
-        "invalid incremental, inc value must be within ["
-        "%s, %s)" % (0 - id_number, 1 << 96 - id_number)
-      )
+          "invalid incremental, inc value must be within ["
+          "%s, %s)" % (0 - id_number, 1 << 96 - id_number))
     return _ObjectIdHelper.int_to_id(new_number)
 
 
@@ -705,7 +696,6 @@ class WriteToMongoDB(PTransform):
   with different unique IDs.
 
   """
-
   def __init__(
       self,
       uri="mongodb://localhost:27017",
@@ -735,7 +725,8 @@ class WriteToMongoDB(PTransform):
     if not isinstance(db, str):
       raise ValueError("WriteToMongoDB db param must be specified as a string")
     if not isinstance(coll, str):
-      raise ValueError("WriteToMongoDB coll param must be specified as a string")
+      raise ValueError(
+          "WriteToMongoDB coll param must be specified as a string")
     self._uri = uri
     self._db = db
     self._coll = coll
@@ -748,11 +739,8 @@ class WriteToMongoDB(PTransform):
         | beam.ParDo(_GenerateObjectIdFn())
         | Reshuffle()
         | beam.ParDo(
-      _WriteMongoFn(
-        self._uri, self._db, self._coll, self._batch_size, self._spec
-      )
-    )
-    )
+            _WriteMongoFn(
+                self._uri, self._db, self._coll, self._batch_size, self._spec)))
 
 
 class _GenerateObjectIdFn(DoFn):
@@ -772,7 +760,8 @@ class _GenerateObjectIdFn(DoFn):
 
 
 class _WriteMongoFn(DoFn):
-  def __init__(self, uri=None, db=None, coll=None, batch_size=100, extra_params=None):
+  def __init__(
+      self, uri=None, db=None, coll=None, batch_size=100, extra_params=None):
     if extra_params is None:
       extra_params = {}
     self.uri = uri
@@ -823,21 +812,19 @@ class _MongoSink:
       # match document based on _id field, if not found in current collection,
       # insert new one, otherwise overwrite it.
       requests.append(
-        ReplaceOne(
-          filter={"_id": doc.get("_id", None)}, replacement=doc, upsert=True
-        )
-      )
+          ReplaceOne(
+              filter={"_id": doc.get("_id", None)},
+              replacement=doc,
+              upsert=True))
     resp = self.client[self.db][self.coll].bulk_write(requests)
     _LOGGER.debug(
-      "BulkWrite to MongoDB result in nModified:%d, nUpserted:%d, "
-      "nMatched:%d, Errors:%s"
-      % (
-        resp.modified_count,
-        resp.upserted_count,
-        resp.matched_count,
-        resp.bulk_api_result.get("writeErrors"),
-      )
-    )
+        "BulkWrite to MongoDB result in nModified:%d, nUpserted:%d, "
+        "nMatched:%d, Errors:%s" % (
+            resp.modified_count,
+            resp.upserted_count,
+            resp.matched_count,
+            resp.bulk_api_result.get("writeErrors"),
+        ))
 
   def __enter__(self):
     if self.client is None:
