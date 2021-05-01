@@ -345,10 +345,13 @@ class _BoundedMongoSource(iobase.BoundedSource):
   def _get_auto_buckets(
       self,
       desired_chunk_size_in_mb,
-      start_pos: ObjectId,
-      end_pos: ObjectId,
+      start_pos: Union[int, str, ObjectId],
+      end_pos: Union[int, str, ObjectId],
       is_initial_split: bool,
   ) -> list:
+    """Use MongoDB `$bucketAuto` aggregation to split collection into bundles
+    instead of `splitVector` command, which does not work with MongoDB Atlas.
+    """
     if start_pos >= _ObjectIdHelper.increment_id(end_pos, -1):
       # single document not splittable
       return []
