@@ -79,8 +79,6 @@ from apache_beam.io import iobase
 from apache_beam.io.range_trackers import OrderedPositionRangeTracker
 from apache_beam.transforms import DoFn, PTransform, Reshuffle
 from apache_beam.utils.annotations import experimental
-from bson import json_util
-from bson.objectid import ObjectId
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,6 +88,8 @@ try:
   # it fails because bson package is installed, MongoDB IO will not work but at
   # least rest of the SDK will work.
   from bson import objectid
+  from bson import json_util
+  from bson.objectid import ObjectId
 
   # pymongo also internally depends on bson.
   from pymongo import ASCENDING
@@ -98,6 +98,12 @@ try:
   from pymongo import ReplaceOne
 except ImportError:
   objectid = None
+  json_util = None
+  ObjectId = None
+  ASCENDING = 1
+  DESCENDING = -1
+  MongoClient = None
+  ReplaceOne = None
   _LOGGER.warning("Could not find a compatible bson package.")
 
 __all__ = ["ReadFromMongoDB", "WriteToMongoDB"]
