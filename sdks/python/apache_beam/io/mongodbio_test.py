@@ -22,8 +22,13 @@ import random
 import unittest
 from unittest import TestCase
 
-import apache_beam as beam
 import mock
+from bson import objectid
+from parameterized import parameterized_class
+from pymongo import ASCENDING
+from pymongo import ReplaceOne
+
+import apache_beam as beam
 from apache_beam.io import ReadFromMongoDB
 from apache_beam.io import WriteToMongoDB
 from apache_beam.io import source_test_utils
@@ -36,10 +41,6 @@ from apache_beam.io.mongodbio import _WriteMongoFn
 from apache_beam.testing.test_pipeline import TestPipeline
 from apache_beam.testing.util import assert_that
 from apache_beam.testing.util import equal_to
-from bson import objectid
-from parameterized import parameterized_class
-from pymongo import ASCENDING
-from pymongo import ReplaceOne
 
 
 class _MockMongoColl(object):
