@@ -77,7 +77,9 @@ from typing import Union
 import apache_beam as beam
 from apache_beam.io import iobase
 from apache_beam.io.range_trackers import OrderedPositionRangeTracker
-from apache_beam.transforms import DoFn, PTransform, Reshuffle
+from apache_beam.transforms import DoFn
+from apache_beam.transforms import PTransform
+from apache_beam.transforms import Reshuffle
 from apache_beam.utils.annotations import experimental
 
 _LOGGER = logging.getLogger(__name__)
